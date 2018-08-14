@@ -1,16 +1,23 @@
 
-/*   CHARMS by JOHN L. DALTON (c) 1990 WULFWARE
+/*   CHARMS by JOHN L. DALTON (c) 1990, 1992
  *   Modelled after the 1990 Sega arcade game Columns
  *   Written using Turbo C, v.2.0
  *   Dates worked on: 901108,1109,1112,1118
  */
 
+/*  UPDATES:
+ *  910311      CR001     Allow sound to be turned off by -s option
+ *  921114      CR002     Don't reset time-of-day clock for timing!
+ *                        version 1.02
+ */
+
+
 /* TERMS:
-     fallee - any set of any number of vertical squares that are suspended
-	      in air, and hence on their way down.
+     fallee - any vertical set of any number of characters that are suspended
+              in air, and hence on their way down.
 
      magic fallee - whatever color it lands on, that color is erased from
-		    the entire board.
+                    the entire board.
  */
 
 /* INSTRUCTIONS:
@@ -28,27 +35,27 @@
 #include <dos.h>    /* sound */
 
 #define YMAX          (13)
-#define XMAX          10
-#define LEFTX         17
-#define RIGHTX        22
-#define BOTY          23
-#define TOPY          9
-#define STARTX        20
+#define XMAX          (10)
+#define LEFTX         (17)
+#define RIGHTX        (22)
+#define BOTY          (23)
+#define TOPY          (9)
+#define STARTX        (20)
 #define STARTY        (11)
-#define SCOREX        7
+#define SCOREX        (7)
 #define SCOREY        (15)
-#define LEVELX        7
+#define LEVELX        (7)
 #define LEVELY        (18)
-#define INSTRUCTX     27
-#define INSTRUCTY     15
-#define CHARMSX       7
+#define INSTRUCTX     (27)
+#define INSTRUCTY     (15)
+#define CHARMSX       (7)
 #define CHARMSY       (21)
-#define NEXTX         24
+#define NEXTX         (24)
 #define NEXTY         (11)
-#define CLEFT         75
-#define CRIGHT        77
-#define CDOWN         80
-#define CUP           72
+#define CLEFT         (75)
+#define CRIGHT        (77)
+#define CDOWN         (80)
+#define CUP           (72)
 #define TRUE          (BOOLEAN)(1)
 #define FALSE         (BOOLEAN)(0)
 #define EMPTY         (0)
@@ -57,26 +64,26 @@
 #define xytoscr(x,y)  ((y)*(monoc?160:80)+(x)*2)
 #define hidecursor()  gotoxy(1,25)
 #define AIR           (32)
-#define FACE          1
-#define DOT           9
+#define FACE          (1)
+#define DOT           (9)
 #define USER          (1)
 #define NEXT          (0)
-#define BLACK 0
-#define BLUE 1
-#define GREEN 2
-#define CYAN 3
-#define RED 4
+#define BLACK   0
+#define BLUE    1
+#define GREEN   2
+#define CYAN    3
+#define RED     4
 #define MAGENTA 5
-#define ORANGE 6
-#define LTGRAY 7
-#define DKGRAY 8
-#define LTBLUE 9
+#define ORANGE  6
+#define LTGRAY  7
+#define DKGRAY  8
+#define LTBLUE  9
 #define LTGREEN 10
-#define LTCYAN 11
-#define LTRED 12
-#define PURPLE 13
-#define YELLOW 14
-#define WHITE 15
+#define LTCYAN  11
+#define LTRED   12
+#define PURPLE  13
+#define YELLOW  14
+#define WHITE   15
 
 typedef unsigned char BYTE;
 typedef unsigned char BOOLEAN;
@@ -98,7 +105,10 @@ typedef struct Dir
   int dx,dy;
 } Dir;
 
+/*---------------------*/
 /* FUNCTION PROTOTYPES */
+/*---------------------*/
+
 void fill_smem(BYTE x, BYTE c);
 int fall(int whichf);
 void updatef_xy(int whichf,BYTE ux,BYTE uy);
@@ -122,6 +132,10 @@ void pick_next_fallee(BOOLEAN magic);
 void seffect(int which);
 void exit_program(void);
 
+/*-------------*/
+/* GLOBAL DATA */
+/*-------------*/
+
 /* DIRECTIONS FOR CHECKING EACH OF FOUR ROWTYPES */
 /* USED IN IDENTIFY_ALL_MATCHES */
 Dir chk[4];
@@ -129,20 +143,28 @@ Dir chk[4];
 FALLEE flist[YMAX*XMAX];  /* 1st is user's, 0th is user's next */
 BYTE _colors[7] = {WHITE,RED,YELLOW,GREEN,MAGENTA,LTCYAN,LTBLUE};
 BYTE _charms[7] = {2,    3,  21,    5,    6,      15,     4};
+
 int level;
 int turns;
 int bonus;
 float score;
 int charms;
+
 BOOLEAN dropflag;
 BOOLEAN gameover;
-unsigned SCRMEM;
 BOOLEAN monoc;
+BOOLEAN soundflag;
+
+unsigned SCRMEM;
+
+long timecheck; // 921114 JLD CR002
 
 /*===============================================*/
 /* MAIN:                                         */
 /*===============================================*/
-main ()
+main(argc, argv)
+   int argc;
+   char *argv[];
 {
    BYTE mx,my;
    BYTE ch;
@@ -150,6 +172,15 @@ main ()
    BYTE magicolor;
    unsigned scrlocs[3] = {0xB800,0xA000,0xB000};
    int i;
+
+   /* CHECK IF NO SOUND */ // { CR001
+   soundflag = TRUE;
+   if (argc>1)
+   {
+     if (strcmp(*++argv,"-s")==0 || strcmp(*argv,"-S")==0)
+       soundflag = FALSE;
+   }
+   // } CR001
 
    /* CHECK IF MONOCHROME */
    monoc = (peekb(0,0x0449)==7);
@@ -192,18 +223,18 @@ main ()
      /* CHECK IF GAME IS OVER */
      if (gameover)
        if (end_of_game())
-	 exit_program();
+         exit_program();
        else
-	 goto Begin;
+         goto Begin;
 
      /* DETERMINE IF THERE WERE ANY 3+ IN A ROW */
      mtotal = (magicolor) ? zapmagic(magicolor) :
-			    identify_all_matches(1,TRUE);
+                            identify_all_matches(1,TRUE);
      if (mtotal>0)
        do
        {
-	 flash_and_rid();
-	 ftotal = form_and_drop_new_fallees();
+         flash_and_rid();
+         ftotal = form_and_drop_new_fallees();
        } while ((mtotal=identify_all_matches(ftotal,FALSE)) > 0);
 
    } while (TRUE==TRUE);
@@ -252,11 +283,11 @@ int end_of_game(void)
     delay(45);
   }
 
-  /* TELL USER, ENTER RESTARTS */
+  /* TELL USER THAT <ENTER> RESTARTS GAME */
   out_instruct(TRUE);
 
   /* FLASH GAME OVER, WAIT FOR A KEY */
-  textattr(CYAN|128);
+  textattr(CYAN | 128);
   gotoxy(12,5);
   cprintf ("G A M E    O V E R");
   while((ch=getch())!=13)
@@ -270,18 +301,18 @@ int end_of_game(void)
 /*************************************************/
 void exit_program(void)
 {
-  fill_smem(AIR,WHITE);
-  textmode(C80);
-  gotoxy(1,1);
+  fill_smem(AIR,WHITE);  /* clear screen */
+  textmode(C80);         /* set back to 80-column mode */
+  gotoxy(1,1);           /* cursor at top of screen */
   exit(0);
 }
 
 /*************************************************/
 /* FALL:                                         */
 /* SEND FALLEE NUMBER.                           */
-/* FALLEE FALLS UNTIL IT LANDS ON SOMETHING      */
-/* IF FALLEE IS MAGIC (WHITE), THIS RETURNS COLOR*/
-/* LANDED UPON.                                  */
+/* FALLEE FALLS UNTIL IT LANDS ON SOMETHING.     */
+/* IF FALLEE IS MAGIC (WHITE), THIS RETURNS      */
+/* THE COLOR THAT WAS LANDED UPON.               */
 /*************************************************/
 int fall(int whichf)
 {
@@ -292,6 +323,7 @@ int fall(int whichf)
   int i;
   long timzup;
 
+
   fx = flist[whichf].pos.x;
   fy = flist[whichf].pos.y;
   dropflag = FALSE;
@@ -300,7 +332,7 @@ int fall(int whichf)
   if (user)
     for (i=LEFTX; i<=RIGHTX; i++)
       if (look_at(i,STARTY)!=BLACK)
-	gameover = TRUE;
+        gameover = TRUE;
 
   if (!gameover)
     do
@@ -309,85 +341,85 @@ int fall(int whichf)
 
       if (kbhit() && user)
       {
-	/* CHECK FOR USER MOVEMENT OF FALLEE */
-	uin = getch();
+        /* CHECK FOR USER MOVEMENT OF FALLEE */
+        uin = getch();
         switch(uin)
         {
-	  case 27:     /* ABRUPT QUIT */
-	    exit_program();
+          case 27:     /* ESCAPE = ABRUPT QUIT */
+            exit_program();
 
-	  case ',':
-	  case CLEFT:
-	  case '<': /* THE COMMA,LESS-THAN KEY MOVES FALLEE LEFT */
-	  {
-	    if (!look_at(fx-1,fy) &&
-		!look_at(fx-1,fy-1) &&
-		!look_at(fx-1,fy-2))
-	    {
-	      fx --;
-	      updatef_xy(whichf,fx,fy);
-	    }
-	    break;
-	  }
-	  case '>':
-	  case CRIGHT:
-	  case '.': /* THE PERIOD,GREATER-THAN KEY MOVES FALLEE RIGHT */
-	  {
-	    if (!look_at(fx+1,fy) &&
-		!look_at(fx+1,fy-1) &&
-		!look_at(fx+1,fy-2))
-	    {
-	      fx ++;
-	      updatef_xy(whichf,fx,fy);
-	    }
-	    break;
-	  }
-	  case ' ': /* THE SPACE BAR ROTATES USER'S FALLEE */
-	  {
-	    temp = flist[whichf].ccolor[0];
-	    flist[whichf].ccolor[0] = flist[whichf].ccolor[1];
-	    flist[whichf].ccolor[1] = flist[whichf].ccolor[2];
-	    flist[whichf].ccolor[2] = temp;
-	    break;
-	  }
-	  case CDOWN:
-	  {
-	    dropflag = TRUE;
-	    break;
-	  }
-	  case CUP:
-	  {
-	    dropflag = FALSE;
-	    break;
-	  }
-	} /* end switch */
+          case ',':
+          case CLEFT:
+          case '<': /* THE COMMA,LESS-THAN KEY MOVES FALLEE LEFT */
+          {
+            if (!look_at(fx-1,fy) &&    /* make sure room to move */
+                !look_at(fx-1,fy-1) &&
+                !look_at(fx-1,fy-2))
+            {
+              fx --;
+              updatef_xy(whichf,fx,fy);
+            }
+            break;
+          }
+          case '>':
+          case CRIGHT:
+          case '.': /* THE PERIOD,GREATER-THAN KEY MOVES FALLEE RIGHT */
+          {
+            if (!look_at(fx+1,fy) &&
+                !look_at(fx+1,fy-1) &&
+                !look_at(fx+1,fy-2))
+            {
+              fx ++;
+              updatef_xy(whichf,fx,fy);
+            }
+            break;
+          }
+          case ' ': /* THE SPACE BAR ROTATES USER'S FALLEE */
+          {
+            temp = flist[whichf].ccolor[0];
+            flist[whichf].ccolor[0] = flist[whichf].ccolor[1];
+            flist[whichf].ccolor[1] = flist[whichf].ccolor[2];
+            flist[whichf].ccolor[2] = temp;
+            break;
+          }
+          case CDOWN: /* cursor down key */
+          {
+            dropflag = TRUE;
+            break;
+          }
+          case CUP:
+          {
+            dropflag = FALSE;
+            break;
+          }
+        } /* end switch */
       } /* end if */
 
       /* CONTROL SPEED OF FALL */
       timzup = (long)( (level<10)  ? (11-level)*2 : 4);
       if (!user || dropflag)
-	timzup = 1;
+        timzup = 1;
 
-      if (biostime(0,0L)>=timzup)
+      if (abs(biostime(0,0L)-timecheck)>=timzup) // 921114 JLD CR002
       {
-	biostime(1,0L);
-	if (look_below(fx,fy) == BLACK)
-	{
-	  /* FALL ONE STEP DOWN */
-	  updatef_xy(whichf,fx,++fy);
+        timecheck = biostime(0,0L); // 921114 JLD CR002
+        if (look_below(fx,fy) == BLACK)
+        {
+          /* FALL ONE STEP DOWN */
+          updatef_xy(whichf,fx,++fy);
 
-	  /* SOUND FOR LANDING */
-	  if (look_below(fx,fy)!=BLACK && user)
-	    seffect(0);
+          /* SOUND FOR LANDING */
+          if (look_below(fx,fy)!=BLACK && user)
+            seffect(0);
 
-	  /* SHOW WHAT CHARMS ARE "ON DECK" (NEXT) */
-	  if (user && fy==STARTY+1)
-	    out_fallee(NEXT,FALSE);
+          /* SHOW WHAT CHARMS ARE "ON DECK" (NEXT) */
+          if (user && fy==STARTY+1)
+            out_fallee(NEXT,FALSE);
 
-	}
-	else
-	  /* FALLEE HAS LANDED */
-	  return( (look_at(fx,fy)==WHITE) ? look_below(fx,fy) : 0);
+        }
+        else
+          /* FALLEE HAS LANDED */
+          return( (look_at(fx,fy)==WHITE) ? look_below(fx,fy) : 0);
       } /* end if */
 
   } while(TRUE==TRUE);
@@ -431,25 +463,25 @@ void flash_and_rid()
     {
       if ((peekb(SCRMEM,xytoscr(x0,y0))&255)==DOT)
       {
-	if (!flash)
-	{
-	  countj++;
-	  colour[which] = look_at(x0,y0);
-	}
+        if (!flash)
+        {
+          countj++;
+          colour[which] = look_at(x0,y0);
+        }
 
-	out_thing(x0,y0,(flash==7)? AIR : DOT,
-			((flash % 2) ? BLACK : colour[which]));
-	which++;
-	delay(10);
-	if (flash % 2)
-	  seffect(1);
+        out_thing(x0,y0,(flash==7)? AIR : DOT,
+                        ((flash % 2) ? BLACK : colour[which]));
+        which++;
+        delay(10);
+        if (flash % 2)
+          seffect(1);
       }
 
       x0++;
       if (x0>RIGHTX)
       {
-	x0 = LEFTX;
-	y0--;
+        x0 = LEFTX;
+        y0--;
       }
     } while (y0 >= STARTY-3);
   }
@@ -462,7 +494,7 @@ void flash_and_rid()
 /* AFTER RIDDING MATCHED CHARMS, THERE WILL BE   */
 /* BLANK SPOTS ON SCREEN.  THIS ROUTINE WILL     */
 /* CAUSE ALL CHARM PILES SUSPENDED IN MID AIR TO */
-/* FALL DOWN                                     */
+/* FALL DOWN.                                    */
 /* RETURNS NUMBER OF PILES THAT FELL             */
 /*************************************************/
 int form_and_drop_new_fallees()
@@ -488,9 +520,9 @@ int form_and_drop_new_fallees()
       x1=px; y1=py-1;
       do
       {
-	bc = look_at(x1,y1);
-	flist[new_total+1].ccolor[i++] = bc;
-	y1--;
+        bc = look_at(x1,y1);
+        flist[new_total+1].ccolor[i++] = bc;
+        y1--;
       } while (bc!=BLACK);
     }
 
@@ -548,37 +580,37 @@ int identify_all_matches(int ftotal,BOOLEAN useronly)
       /* FOR EACH ROW TYPE CONTAINING THIS CHARM */
       for (rowtype=0; rowtype<=3; rowtype++) /* / \ | - */
       {
-	kount = 1;
+        kount = 1;
 
-	/* FOR EACH DIRECTION FROM CHARM ALONG THIS ROW */
-	for (dir=0; dir<=1; dir++)
-	{
-	  x0 = bx; y0 = by;
-	  goodrow[1].x = x0;
-	  goodrow[1].y = y0;
+        /* FOR EACH DIRECTION FROM CHARM ALONG THIS ROW */
+        for (dir=0; dir<=1; dir++)
+        {
+          x0 = bx; y0 = by;
+          goodrow[1].x = x0;
+          goodrow[1].y = y0;
 
-	  /* COUNT ALL IDENTICAL CHARMS IN A ROW */
-	  while (look_at( (xt=x0+(dir*2-1)*chk[rowtype].dx),
-			  (yt=y0+(dir*2-1)*chk[rowtype].dy))
-		 == bcolor)
-	  {
-	    kount++;
-	    x0 = xt; y0 = yt;
-	    goodrow[kount].x = x0;
-	    goodrow[kount].y = y0;
-	  }
+          /* COUNT ALL IDENTICAL CHARMS IN A ROW */
+          while (look_at( (xt=x0+(dir*2-1)*chk[rowtype].dx),
+                          (yt=y0+(dir*2-1)*chk[rowtype].dy))
+                 == bcolor)
+          {
+            kount++;
+            x0 = xt; y0 = yt;
+            goodrow[kount].x = x0;
+            goodrow[kount].y = y0;
+          }
 
-	} /* next dir */
+        } /* next dir */
 
-	/* KEEP TRACK OF ALL 3+ IN A ROW */
-	if (kount>=3)
-	{
-	  /* CHANGE CHARM TO A DOT, SO WE KNOW TO RID IT FROM BOARD */
-	  for (k=1; k<=kount; k++)
-	    out_thing (goodrow[k].x,goodrow[k].y,DOT,bcolor);
+        /* KEEP TRACK OF ALL 3+ IN A ROW */
+        if (kount>=3)
+        {
+          /* CHANGE CHARM TO A DOT, SO WE KNOW TO RID IT FROM BOARD */
+          for (k=1; k<=kount; k++)
+            out_thing (goodrow[k].x,goodrow[k].y,DOT,bcolor);
 
-	  mcount++;
-	}
+          mcount++;
+        }
 
       } /* next row */
     } /* next charm of fallee */
@@ -624,7 +656,7 @@ void initialization(void)
    textattr(16*LTGRAY+BLUE);
    gotoxy (10,1);   cprintf ("      C H A R M S     ");
    gotoxy (10,2);   cprintf ("                      ");
-   gotoxy (10,3);   cprintf (" (c) 1990 John Dalton ");
+   gotoxy (10,3);   cprintf (" (c) 1992 John Dalton ");
 
    /* STATUS FRAMEWORK */
    textattr(YELLOW);  gotoxy (SCOREX,SCOREY);   cprintf ("SCORE:");
@@ -639,6 +671,8 @@ void initialization(void)
    out_instruct(FALSE);
 
    bonus = 10;
+
+   timecheck = biostime(0,0L); // 921114 JLD CR002
 }
 
 /*************************************************/
@@ -712,12 +746,12 @@ void out_fallee(int whichf,BOOLEAN clear)
   while ((oc=flist[whichf].ccolor[i++]) > EMPTY)
   {
       if (clear)
-	oc = BLACK;
+        oc = BLACK;
 
       ot = AIR;
       for (j=0; j<=6; j++)
-	if (oc==_colors[j])
-	  ot = _charms[j];  /* shape of charm is dictated by the color */
+        if (oc==_colors[j])
+          ot = _charms[j];  /* shape of charm is dictated by the color */
 
       out_thing(ox,oy--,ot,oc);
   }
@@ -780,12 +814,13 @@ void pick_next_fallee(BOOLEAN magic)
 /*************************************************/
 void seffect(int which)
 {
-  switch(which)
-  {
-    case 0: sound(20); delay(20); nosound();break;
-    case 1: return;
-    case 2: return;
-  }
+  if (soundflag)
+    switch(which)
+    {
+      case 0: sound(20); delay(20); nosound();break;
+      case 1: return;
+      case 2: return;
+    }
 }
 
 /*************************************************/
@@ -850,11 +885,11 @@ int zapmagic(BYTE magicc)
     for (zx=LEFTX; zx <= RIGHTX; zx++)
       if ((cc=look_at(zx,zy))==magicc || (cc==WHITE))
       {
-	/* CHANGE CHARM TO DOT SO WE KNOW TO GET RID OF IT */
-	out_thing(zx,zy,DOT,cc);
-	seffect(2);
-	delay(5);
-	totalz++;
+        /* CHANGE CHARM TO DOT SO WE KNOW TO GET RID OF IT */
+        out_thing(zx,zy,DOT,cc);
+        seffect(2);
+        delay(5);
+        totalz++;
       }
 
   return(totalz);
